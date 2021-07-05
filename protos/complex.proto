@@ -1,0 +1,20 @@
+syntax = "proto2";
+
+option go_package = "protobuf-conversion/benches";
+
+message Complex {
+  optional Enum optional_enum = 1;
+  repeated bytes repeated_bytes = 2;
+  map<int32, Nested> map_message = 3;
+
+  enum Enum { 
+    ZERO = 0;
+    ONE = 1;
+    TEN = 10;
+  }
+
+  message Nested {
+    optional string optional_string = 1;
+  }
+}
+

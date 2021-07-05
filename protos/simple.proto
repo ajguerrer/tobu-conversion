@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+option go_package = "protobuf-conversion/benches";
+
+message Simple {
+   bool simple_bool = 1;
+}
+
