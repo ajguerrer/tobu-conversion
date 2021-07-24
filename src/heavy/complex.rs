@@ -15,26 +15,20 @@ pub struct Complex {
     pub map_message: HashMap<i32, ComplexNested>,
 }
 
-#[repr(i32)]
-pub enum ComplexEnum {
-    One = 1,
-    Two = 2,
-    Ten = 10,
-}
-
-impl ComplexEnum {
-    pub fn new(number: i32) -> Option<ComplexEnum> {
-        match number {
-            1 => Some(ComplexEnum::One),
-            2 => Some(ComplexEnum::Two),
-            10 => Some(ComplexEnum::Ten),
-            _ => None,
-        }
+impl Complex {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
-pub struct ComplexNested {
-    pub optional_string: Option<String>,
+impl Default for Complex {
+    fn default() -> Self {
+        Complex {
+            optional_enum: None,
+            repeated_bytes: Vec::new(),
+            map_message: HashMap::new(),
+        }
+    }
 }
 
 impl From<Complex> for Message {
@@ -84,6 +78,54 @@ impl TryFrom<Message> for Complex {
                 None => Err(AbsorbError::not_optional("map_message")),
             }?,
         })
+    }
+}
+
+#[repr(i32)]
+pub enum ComplexEnum {
+    One = 1,
+    Two = 2,
+    Ten = 10,
+}
+
+impl ComplexEnum {
+    pub fn new(number: i32) -> Option<ComplexEnum> {
+        match number {
+            1 => Some(ComplexEnum::One),
+            2 => Some(ComplexEnum::Two),
+            10 => Some(ComplexEnum::Ten),
+            _ => None,
+        }
+    }
+}
+
+impl Default for ComplexEnum {
+    fn default() -> Self {
+        ComplexEnum::One
+    }
+}
+
+impl From<ComplexEnum> for Enum {
+    fn from(e: ComplexEnum) -> Self {
+        Enum { number: e as i32 }
+    }
+}
+
+pub struct ComplexNested {
+    pub optional_string: Option<String>,
+}
+
+impl ComplexNested {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for ComplexNested {
+    fn default() -> Self {
+        ComplexNested {
+            optional_string: None,
+        }
     }
 }
 

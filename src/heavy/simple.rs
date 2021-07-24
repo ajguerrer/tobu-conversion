@@ -9,6 +9,18 @@ pub struct Simple {
     pub simple_bool: bool,
 }
 
+impl Simple {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Simple {
+    fn default() -> Self {
+        Simple { simple_bool: false }
+    }
+}
+
 impl From<Simple> for Message {
     fn from(m: Simple) -> Self {
         Message {

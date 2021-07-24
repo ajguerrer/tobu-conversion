@@ -8,3 +8,15 @@ edition = "2018"
 
 [dependencies]
 thiserror = "1"
+
+[dev-dependencies]
+criterion  = "0.3"
+
+
+[[bench]]
+name = "heavy"
+harness = false
+
+[[bench]]
+name = "light"
+harness = false
