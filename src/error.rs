@@ -12,6 +12,9 @@ pub enum AbsorbError {
 
     #[error("Field type {ty} does not match type of field {name}")]
     InvalidType { name: String, ty: String },
+
+    #[error("Field {name} is not optional")]
+    TypeNotOptional { name: String },
 }
 
 impl AbsorbError {
@@ -30,6 +33,12 @@ impl AbsorbError {
         Self::InvalidType {
             name: name.to_string(),
             ty: value.type_string(),
+        }
+    }
+
+    pub fn not_optional(name: &str) -> Self {
+        Self::TypeNotOptional {
+            name: name.to_string(),
         }
     }
 }

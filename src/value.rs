@@ -78,7 +78,6 @@ pub struct Enum {
     pub number: i32,
 }
 
-#[derive(Debug, Clone)]
 pub struct Message {
     pub fields: Vec<Option<Value>>,
 }
