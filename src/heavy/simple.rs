@@ -5,6 +5,7 @@ use crate::{
     value::{Message, Rule, Value},
 };
 
+#[derive(Debug, Clone)]
 pub struct Simple {
     pub simple_bool: bool,
 }

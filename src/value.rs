@@ -53,8 +53,8 @@ impl Value {
 impl<T> Rule<T> {
     pub fn type_string(&self) -> String {
         match self {
-            Rule::Singular(v) => "Rule::Singular()".to_owned(),
-            Rule::Repeated(v) => "Rule::Repeated()".to_owned(),
+            Rule::Singular(_) => "Rule::Singular()".to_owned(),
+            Rule::Repeated(_) => "Rule::Repeated()".to_owned(),
             Rule::Map(v) => format!("Rule::Map({})", v.type_string()),
         }
     }
@@ -74,10 +74,12 @@ impl<T> Key<T> {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
 pub struct Enum {
     pub number: i32,
 }
 
+#[derive(Debug, Clone)]
 pub struct Message {
     pub fields: Vec<Option<Value>>,
 }

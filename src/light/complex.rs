@@ -6,6 +6,7 @@ use crate::{
 };
 
 #[repr(transparent)]
+#[derive(Debug, Clone)]
 pub struct Complex {
     inner: Message,
 }
@@ -17,8 +18,12 @@ impl Complex {
 
     pub fn optional_enum(&self) -> ComplexEnum {
         match &self.inner.fields[0] {
-            Some(Value::Enum(Rule::Singular(v))) => *ComplexEnum::cast(v).unwrap(),
-            Some(v) => unreachable!(),
+            Some(Value::Enum(Rule::Singular(v))) => unsafe {
+                // Safety: ComplexEnum is repr(i32) and
+                // Enum is a repr(transparent) wrapper around i32
+                *(v as *const Enum as *const ComplexEnum)
+            },
+            Some(_) => unreachable!(),
             None => ComplexEnum::default(),
         }
     }
@@ -27,15 +32,17 @@ impl Complex {
         match self.inner.fields[0]
             .get_or_insert(Value::Enum(Rule::Singular(ComplexEnum::default().into())))
         {
-            Value::Enum(Rule::Singular(v)) => ComplexEnum::cast_mut(v).unwrap(),
-            v => unreachable!(),
+            Value::Enum(Rule::Singular(v)) => unsafe {
+                // Safety: ComplexEnum is repr(i32) and
+                // Enum is a repr(transparent) wrapper around i32
+                &mut *(v as *mut Enum as *mut ComplexEnum)
+            },
+            _ => unreachable!(),
         }
     }
 
     pub fn clear_optional_enum(&mut self) {
-        if let Some(v) = &mut self.inner.fields[0] {
-            *v = Value::Enum(Rule::Singular(ComplexEnum::default().into()))
-        }
+        self.inner.fields[0] = None;
     }
 
     pub fn has_optional_enum(&self) -> bool {
@@ -52,27 +59,27 @@ impl Complex {
     pub fn repeated_bytes_mut(&mut self) -> &mut Vec<Vec<u8>> {
         match &mut self.inner.fields[1] {
             Some(Value::Bytes(Rule::Repeated(v))) => v,
-            v => unreachable!(),
-        }
-    }
-
-    pub fn map_message(&self) -> &HashMap<i32, &ComplexNested> {
-        match &self.inner.fields[2] {
-            Some(Value::Message(Rule::Map(Key::I32(v)))) => &v
-                .iter()
-                .map(|(k, v)| (*k, ComplexNested::cast(v).unwrap()))
-                .collect(),
             _ => unreachable!(),
         }
     }
 
-    pub fn map_message_mut(&mut self) -> &mut HashMap<i32, &mut ComplexNested> {
+    pub fn map_message(&self) -> &HashMap<i32, ComplexNested> {
+        match &self.inner.fields[2] {
+            Some(Value::Message(Rule::Map(Key::I32(v)))) => unsafe {
+                // Safety: ComplexNested is a repr(transparent) wrapper around a Message
+                &*(v as *const HashMap<i32, Message> as *const HashMap<i32, ComplexNested>)
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn map_message_mut(&mut self) -> &mut HashMap<i32, ComplexNested> {
         match &mut self.inner.fields[2] {
-            Some(Value::Message(Rule::Map(Key::I32(v)))) => &mut v
-                .iter_mut()
-                .map(|(k, v)| (*k, ComplexNested::cast_mut(v).unwrap()))
-                .collect(),
-            v => unreachable!(),
+            Some(Value::Message(Rule::Map(Key::I32(v)))) => unsafe {
+                // Safety: ComplexNested is a repr(transparent) wrapper around a Message
+                &mut *(v as *mut HashMap<i32, Message> as *mut HashMap<i32, ComplexNested>)
+            },
+            _ => unreachable!(),
         }
     }
 
@@ -82,42 +89,24 @@ impl Complex {
         }
 
         match &m.fields[0] {
-            Some(Value::Enum(Rule::Singular(v))) => ComplexEnum::cast(v).err(),
+            Some(Value::Enum(Rule::Singular(v))) => ComplexEnum::validate(v),
             Some(v) => Some(AbsorbError::invalid_type("optional_enum", v)),
             None => None,
         }?;
 
         match &m.fields[1] {
-            Some(Value::Bytes(Rule::Repeated(v))) => None,
+            Some(Value::Bytes(Rule::Repeated(_))) => None,
             Some(v) => Some(AbsorbError::invalid_type("repeated_bytes", v)),
             None => Some(AbsorbError::not_optional("repeated_bytes")),
         }?;
 
         match &m.fields[2] {
             Some(Value::Message(Rule::Map(Key::I32(v)))) => {
-                v.values().find_map(|v| ComplexNested::cast(v).err())
+                v.values().find_map(ComplexNested::validate)
             }
             Some(v) => Some(AbsorbError::invalid_type("map_message", v)),
             None => Some(AbsorbError::not_optional("map_message")),
         }
-    }
-
-    fn cast(m: &Message) -> Result<&Self, AbsorbError> {
-        if let Some(err) = Self::validate(m) {
-            return Err(err);
-        }
-
-        // Safety: Complex is repr(transparent) wrapper around a single Message field
-        Ok(unsafe { &*(m as *const Message as *const Complex) })
-    }
-
-    fn cast_mut(m: &mut Message) -> Result<&mut Self, AbsorbError> {
-        if let Some(err) = Self::validate(m) {
-            return Err(err);
-        }
-
-        // Safety: Complex is repr(transparent) wrapper around a single Message field
-        Ok(unsafe { &mut *(m as *mut Message as *mut Complex) })
     }
 }
 
@@ -144,14 +133,17 @@ impl From<Complex> for Message {
 impl TryFrom<Message> for Complex {
     type Error = AbsorbError;
 
-    fn try_from(mut m: Message) -> Result<Self, Self::Error> {
-        Complex::cast(&m)?;
+    fn try_from(m: Message) -> Result<Self, Self::Error> {
+        if let Some(err) = Self::validate(&m) {
+            return Err(err);
+        }
+
         Ok(Complex { inner: m })
     }
 }
 
 #[repr(i32)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum ComplexEnum {
     One = 1,
     Two = 2,
@@ -174,24 +166,6 @@ impl ComplexEnum {
             _ => Some(AbsorbError::invalid_enum("ComplexEnum", e)),
         }
     }
-
-    fn cast(e: &Enum) -> Result<&Self, AbsorbError> {
-        if let Some(err) = Self::validate(e) {
-            return Err(err);
-        }
-
-        // Safety: ComplexEnum is repr(i32)
-        Ok(unsafe { &*(e.number as *const i32 as *const ComplexEnum) })
-    }
-
-    fn cast_mut(e: &mut Enum) -> Result<&mut Self, AbsorbError> {
-        if let Some(err) = Self::validate(e) {
-            return Err(err);
-        }
-
-        // Safety: ComplexEnum is repr(i32)
-        Ok(unsafe { &mut *(e.number as *mut i32 as *mut ComplexEnum) })
-    }
 }
 
 impl From<ComplexEnum> for Enum {
@@ -206,6 +180,7 @@ impl Default for ComplexEnum {
     }
 }
 
+#[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct ComplexNested {
     inner: Message,
@@ -214,6 +189,30 @@ pub struct ComplexNested {
 impl ComplexNested {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub fn optional_string(&self) -> &str {
+        match &self.inner.fields[0] {
+            Some(Value::String(Rule::Singular(v))) => v,
+            Some(_) => unreachable!(),
+            None => "",
+        }
+    }
+
+    pub fn optional_string_mut(&mut self) -> &mut String {
+        match self.inner.fields[0].get_or_insert(Value::String(Rule::Singular("".to_string()))) {
+            Value::String(Rule::Singular(v)) => v,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn clear_optional_enum(&mut self) {
+        if let Some(v) = &mut self.inner.fields[0] {
+            *v = Value::String(Rule::Singular("".to_string()))
+        }
+    }
+
+    pub fn has_optional_enum(&self) -> bool {
+        self.inner.fields[0].is_some()
     }
 
     fn validate(m: &Message) -> Option<AbsorbError> {
@@ -226,24 +225,6 @@ impl ComplexNested {
             Some(v) => Some(AbsorbError::invalid_type("optional_string", v)),
             None => None,
         }
-    }
-
-    fn cast(m: &Message) -> Result<&Self, AbsorbError> {
-        if let Some(err) = Self::validate(m) {
-            return Err(err);
-        }
-
-        // Safety: ComplexNested is repr(transparent) wrapper around a single Message field
-        Ok(unsafe { &*(m as *const Message as *const ComplexNested) })
-    }
-
-    fn cast_mut(m: &mut Message) -> Result<&mut Self, AbsorbError> {
-        if let Some(err) = Self::validate(m) {
-            return Err(err);
-        }
-
-        // Safety: ComplexNested is repr(transparent) wrapper around a single Message field
-        Ok(unsafe { &mut *(m as *mut Message as *mut ComplexNested) })
     }
 }
 
@@ -264,8 +245,48 @@ impl From<ComplexNested> for Message {
 impl TryFrom<Message> for ComplexNested {
     type Error = AbsorbError;
 
-    fn try_from(mut m: Message) -> Result<Self, Self::Error> {
-        ComplexNested::cast(&m)?;
+    fn try_from(m: Message) -> Result<Self, Self::Error> {
+        if let Some(err) = Self::validate(&m) {
+            return Err(err);
+        }
+
         Ok(ComplexNested { inner: m })
     }
 }
+
+//#[cfg(test)]
+//mod tests {
+//    use super::*;
+//
+//    #[test]
+//    fn map_works() {
+//        let mut c = Complex::new();
+//
+//        let mut cn = ComplexNested::new();
+//        *cn.optional_string_mut() = "hello".to_string();
+//        c.map_message_mut().insert(1, cn);
+//
+//        let mut cn = ComplexNested::new();
+//        *cn.optional_string_mut() = "world".to_string();
+//        c.map_message_mut().insert(2, cn);
+//
+//        let m = match &c.inner.fields[2] {
+//            Some(Value::Message(Rule::Map(Key::I32(v)))) => v,
+//            _ => unreachable!(),
+//        };
+//
+//        let v = match &m[&1].fields[0] {
+//            Some(Value::String(Rule::Singular(v))) => v,
+//            _ => unreachable!(),
+//        };
+//
+//        assert_eq!(v, "hello");
+//
+//        let v = match &m[&2].fields[0] {
+//            Some(Value::String(Rule::Singular(v))) => v,
+//            _ => unreachable!(),
+//        };
+//
+//        assert_eq!(v, "world");
+//    }
+//}

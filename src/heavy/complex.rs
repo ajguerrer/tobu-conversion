@@ -9,6 +9,7 @@ use crate::{
     value::{Enum, Key, Message, Rule, Value},
 };
 
+#[derive(Debug, Clone)]
 pub struct Complex {
     pub optional_enum: Option<ComplexEnum>,
     pub repeated_bytes: Vec<Vec<u8>>,
@@ -53,24 +54,27 @@ impl TryFrom<Message> for Complex {
     type Error = AbsorbError;
 
     fn try_from(m: Message) -> Result<Self, Self::Error> {
-        if m.fields.len() != 3 {
-            return Err(AbsorbError::invalid_length(3, m.fields.len()));
+        let mut fields = m.fields.into_iter();
+        if fields.len() != 3 {
+            return Err(AbsorbError::invalid_length(3, fields.len()));
         }
 
         Ok(Complex {
-            optional_enum: m.fields[0]
+            optional_enum: fields
+                .next()
+                .unwrap()
                 .map(|v| match v {
                     Value::Enum(Rule::Singular(v)) => ComplexEnum::new(v.number)
                         .ok_or_else(|| AbsorbError::invalid_enum("ComplexEnum", &v)),
                     v => Err(AbsorbError::invalid_type("optional_enum", &v)),
                 })
                 .transpose()?,
-            repeated_bytes: match m.fields[1] {
+            repeated_bytes: match fields.next().unwrap() {
                 Some(Value::Bytes(Rule::Repeated(v))) => Ok(v),
                 Some(v) => Err(AbsorbError::invalid_type("repeated_bytes", &v)),
                 None => Err(AbsorbError::not_optional("repeated_bytes")),
             }?,
-            map_message: match m.fields[2] {
+            map_message: match fields.next().unwrap() {
                 Some(Value::Message(Rule::Map(Key::I32(v)))) => {
                     v.into_iter().map(|(k, v)| Ok((k, v.try_into()?))).collect()
                 }
@@ -82,6 +86,7 @@ impl TryFrom<Message> for Complex {
 }
 
 #[repr(i32)]
+#[derive(Debug, Clone, Copy)]
 pub enum ComplexEnum {
     One = 1,
     Two = 2,
@@ -111,6 +116,7 @@ impl From<ComplexEnum> for Enum {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ComplexNested {
     pub optional_string: Option<String>,
 }

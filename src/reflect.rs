@@ -6,6 +6,7 @@ pub trait Reflect: Sized {
     fn reflect(self) -> Reflection<Self>;
 }
 
+#[derive(Debug, Clone)]
 pub struct Reflection<T> {
     message: Message,
     _marker: PhantomData<T>,
