@@ -1,5 +1,5 @@
 [package]
-name = "protobuf-conversion"
+name = "tobu-conversion"
 version = "0.1.0"
 authors = ["Andrew Guerrero <ajguerrer@gmail.com>"]
 edition = "2018"
